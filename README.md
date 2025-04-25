@@ -2,11 +2,12 @@
 This will help setup n8n with Caddy and Postgres 14
 
 ## Quick Setup
-### Create volumes
+### Add docker grp
+
 ```
-docker volume create n8n_data
-docker volume create caddy_data
-docker volume create db_data
+sudo usermod -aG docker ubuntu 
+
+newgrp docker
 ```
 
 ### Edit files

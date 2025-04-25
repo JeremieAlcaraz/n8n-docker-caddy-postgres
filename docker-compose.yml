@@ -27,6 +27,23 @@ services:
       - caddy_data:/data
       - ./caddy_config:/etc/caddy
 
+  watchtower:
+    image: containrrr/watchtower:latest
+    restart: unless-stopped
+    # Monte le socket Docker pour que Watchtower puisse contrôler vos containers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Optionnel : nettoie les anciennes images après update
+    command: >
+      --cleanup
+      --label-enable
+      --schedule "0 0 * * * *"
+    # --> ici :  
+    #    • --cleanup supprime les images obsolètes  
+    #    • --label-enable ne met à jour que les containers marqués (voir plus bas)  
+    #    • --schedule définit une Cron (ici toutes les heures à 0 seconde)
+
+
   n8n:
     image: n8nio/n8n:latest
     restart: always
