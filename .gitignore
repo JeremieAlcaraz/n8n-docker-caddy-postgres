@@ -1,0 +1,14 @@
+# Environnement – toujours garder .env hors du repo
+.env
+
+# Données Caddy (ACME, certificats)
+caddy_data/
+caddy_config/acme.json
+
+# Données PostgreSQL (si vous les montez dans un dossier local)
+postgres_data/
+
+# Fichiers systèmes & éditeurs
+.DS_Store
+.vscode/
+.idea/
