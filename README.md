@@ -1,83 +1,85 @@
 # n8n-docker-caddy-postgres
-This will help setup n8n with Caddy and Postgres 14
+This guide will help you set up n8n with Caddy and Postgres 14.
 
 ## Quick Setup
-### Add docker grp
 
-```
-sudo usermod -aG docker ubuntu 
+### Add the docker group (if needed)
+
+```bash
+sudo usermod -aG docker ubuntu
 
 newgrp docker
 ```
 
-### Edit files
-- [ ] .env  
-- [ ] caddy_config/Caddyfile  
+### Edit the env file
 
-### Start Containers
-```
+- [ ] `.env`
+
+### Start the containers
+
+```bash
 docker compose up -d
 ```
 
+---
+
+## 1. Connect to your VPS via SSH
+
+```bash
+ssh ubuntu@your_vps_ip
+```
 
 ---
 
-## 1. Se connecter en ssh à son VPS
+## 2. Install Git (if needed) and Docker
 
----
+If Git is not installed:
 
-## 2. Installer git (si besoin) et docker
-
-Si besoin d’installer git : 
-
-```yaml
+```bash
 sudo apt update
 sudo apt install git
 ```
 
-Pour installer docker : 
+To install Docker:
 
-```yaml
+```bash
 curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 ```
 
 ---
 
-## 3. Cloner ce repo et générer le .env
+## 3. Clone this repo and generate the .env file
 
-Ce [repo](https://github.com/JeremieAlcaraz/n8n-docker-caddy-postgres) contient un docker-compose.yml avec n8n, caddy et postgre (parfait pour nous !)
+This [repo](https://github.com/JeremieAlcaraz/n8n-docker-caddy-postgres) contains a `docker-compose.yml` with n8n, Caddy, and Postgres (perfect for us!).
 
-```yaml
+```bash
 git clone https://github.com/JeremieAlcaraz/n8n-docker-caddy-postgres.git
-```
-
-```notion
 cd n8n-docker-caddy-postgres
 ```
 
-```notion
-# rends le script gen-env.sh exécutable
-chmod +x gen-env.sh
+Make the `gen-env.sh` script executable and run it:
 
-# exécute-le
+```bash
+chmod +x gen-env.sh
 ./gen-env.sh
 ```
 
-## 4. Récupérer l’IP et faire pointer le sous-domaine vers l’IP
+## 4. Retrieve the IP address and point your subdomain to it
 
-```notion
+```bash
 curl -s https://ipinfo.io/ip
 ```
 
-Créer un sous-domaine sur le register et faire pointer vers l’IP publique du VPS
+Create a subdomain in your DNS registrar and point it to your VPS's public IP address.
 
-## 5. MàJ .env
+## 5. Update the .env file
 
-Mettre les infos à jour dans le .env
+Fill in or update the variables in the `.env` file with your information.
 
-## 6. Démarrer la stack
+## 6. Start the stack
 
-```notion
+```bash
 docker compose up -d
 ```
+
