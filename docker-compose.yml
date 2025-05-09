@@ -1,23 +1,33 @@
+version: '3.8'
+
 services:
+  # PostgreSQL - Base de données pour n8n et Guacamole
+  # Stocke les workflows n8n et les configurations de connexion Guacamole
+  # Le script init-data.sh initialise la structure nécessaire pour Guacamole
   postgres:
+    container_name: postgres
     image: postgres:14
     restart: always
     environment:
-      - POSTGRES_USER
-      - POSTGRES_PASSWORD
-      - POSTGRES_DB
-      - POSTGRES_NON_ROOT_USER
-      - POSTGRES_NON_ROOT_PASSWORD
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_NON_ROOT_USER=${POSTGRES_NON_ROOT_USER}
+      - POSTGRES_NON_ROOT_PASSWORD=${POSTGRES_NON_ROOT_PASSWORD}
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./init-data.sh:/docker-entrypoint-initdb.d/init-data.sh
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      test: ['CMD-SHELL','pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
       interval: 5s
       timeout: 5s
       retries: 10
 
+  # Caddy - Serveur web/proxy inverse moderne avec SSL/TLS automatique
+  # Gère les connexions HTTPS et redirige le trafic vers les applications internes
+  # Le Caddyfile doit être configuré dans ./caddy_config/Caddyfile
   caddy:
+    container_name: caddy
     image: caddy:latest
     restart: unless-stopped
     ports:
@@ -26,19 +36,25 @@ services:
     volumes:
       - caddy_data:/data
       - ./caddy_config:/etc/caddy
+    depends_on:
+      - guacamole
+      - n8n
 
-
+  # n8n - Plateforme d'automatisation de workflows
+  # Gère les workflows pour le traitement des PDF et l'extraction d'informations
+  # Se connecte à la base de données PostgreSQL pour stocker les workflows
   n8n:
+    container_name: n8n
     image: n8nio/n8n:latest
     restart: always
-    ports:
-      - 5678:5678
+    expose:
+      - "5678"
     environment:
-      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_HOST=${N8N_SUBDOMAIN}.${DOMAIN_NAME}
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
       - NODE_ENV=production
-      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - WEBHOOK_URL=https://${N8N_SUBDOMAIN}.${DOMAIN_NAME}/
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
@@ -46,35 +62,88 @@ services:
       - DB_POSTGRESDB_DATABASE=${POSTGRES_DB}
       - DB_POSTGRESDB_USER=${POSTGRES_NON_ROOT_USER}
       - DB_POSTGRESDB_PASSWORD=${POSTGRES_NON_ROOT_PASSWORD}
-    links:
-      - postgres
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
     volumes:
       - n8n_data:/home/node/.n8n
-      - ${DATA_FOLDER}/local_files:/files
+      # Suppression de la référence au DATA_FOLDER
     depends_on:
       postgres:
         condition: service_healthy
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
-  
+
+  # Watchtower - Service de mise à jour automatique des conteneurs
+  # Surveille et met à jour automatiquement les images Docker
+  # Programmé pour s'exécuter tous les jours à 3h du matin
   watchtower:
+    container_name: watchtower
     image: containrrr/watchtower:latest
     restart: unless-stopped
-    # Monte le socket Docker pour que Watchtower puisse contrôler vos containers
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    # Optionnel : nettoie les anciennes images après update
     command: >
       --cleanup
       --label-enable
-      --schedule "0 0 3 * * *" 
-    # tous les jours à 3h du mat
-    # --> ici :  
-    #    • --cleanup supprime les images obsolètes  
-    #    • --label-enable ne met à jour que les containers marqués (voir plus bas)  
-    #    • --schedule définit une Cron (ici toutes les heures à 0 seconde)
-      
+      --schedule "0 0 3 * * *"
+
+  # guacd - Serveur protocole de Guacamole
+  # Traduit les protocoles de bureau à distance (RDP, VNC, SSH) en protocole web
+  # Communique avec le front-end Guacamole via un socket interne
+  guacd:
+    container_name: guacd
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
+    # Ajout d'un healthcheck pour garantir que guacd fonctionne correctement
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "4822"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Guacamole - Interface web de connexion à distance
+  # Fournit l'interface web pour accéder aux VM via un navigateur
+  # Communique avec guacd pour les connexions aux machines distantes
+  guacamole:
+    container_name: guacamole
+    image: guacamole/guacamole:1.5.5
+    restart: unless-stopped
+    environment:
+      - GUACD_HOSTNAME=guacd
+      - GUACD_PORT=4822
+      - POSTGRES_HOSTNAME=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DATABASE=${GUAC_DB}
+      - POSTGRES_USER=${POSTGRES_NON_ROOT_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_NON_ROOT_PASSWORD}
+    expose:
+      - "8080"
+    volumes:
+      - guac_extensions:/guac-home/extensions
+      - guac_records:/guac-home/recordings
+      # Montage du fichier de propriétés personnalisées pour la configuration CORS
+      - ./guacamole.properties:/guac-home/guacamole.properties
+    depends_on:
+      guacd:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+# Définition des volumes persistants pour stocker les données
 volumes:
+  # Stockage des données et certificats Caddy
   caddy_data:
+  # Stockage des workflows et données n8n
   n8n_data:
+  # Stockage des données PostgreSQL
   db_data:
+  # Stockage des extensions Guacamole
+  guac_extensions:
+  # Stockage des enregistrements de session Guacamole
+  guac_records:
